@@ -48,13 +48,18 @@ app.get("/produits/liste", (requete, resultat) => {
 app.post("/produit", interceptor, (requete, resultat) => {
   const produit = requete.body;
 
-  //validation
+  if (requete.user.role != "vendeur" && 
+    requete.user.role != "administrateur") {
+      return resultat.sendStatus(403);
+  }
+
   if (
     produit.nom == null ||
     produit.nom == "" ||
     produit.nom.length > 20 ||
     produit.description.length > 50
   ) {
+    //validation
     return resultat.sendStatus(400); //bad request
   }
 
@@ -109,7 +114,10 @@ app.post("/inscription", (requete, resultat) => {
 
 app.post("/connexion", (requete, resultat) => {
   connection.query(
-    "SELECT * FROM utilisateur WHERE email = ?",
+    `SELECT u.id, u.email, u.password, r.nom 
+      FROM utilisateur u 
+      JOIN role r ON u.role_id = r.id 
+      WHERE email = ?`,
     [requete.body.email],
     (erreur, lignes) => {
       if (erreur) {
@@ -137,7 +145,13 @@ app.post("/connexion", (requete, resultat) => {
       }
 
       return resultat.send(
-        jwtUtils.sign({ sub: requete.body.email }, "azerty123")
+        jwtUtils.sign(
+          {
+            sub: requete.body.email,
+            role: lignes[0].nom,
+          },
+          "azerty123"
+        )
       );
     }
   );
