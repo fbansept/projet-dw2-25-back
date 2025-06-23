@@ -3,6 +3,7 @@ const cors = require("cors");
 const mysql = require("mysql2");
 const bcrypt = require("bcrypt");
 const jwtUtils = require("jsonwebtoken");
+const interceptor = require("./middleware/jwt-interceptor");
 
 const app = express();
 
@@ -11,7 +12,7 @@ const connection = mysql.createConnection({
   host: "localhost",
   port: 3306, //<-- optionnel si c'est le port par défaut (3306)
   user: "root",
-  password: "root", //<--- ne pas mettre si vous n'avez pas de mot de passe
+  //password: "", //<--- ne pas mettre si vous n'avez pas de mot de passe
   database: "project-dw2",
 });
 
@@ -44,7 +45,7 @@ app.get("/produits/liste", (requete, resultat) => {
   });
 });
 
-app.post("/produit", (requete, resultat) => {
+app.post("/produit", interceptor, (requete, resultat) => {
   const produit = requete.body;
 
   //validation
@@ -115,6 +116,8 @@ app.post("/connexion", (requete, resultat) => {
         console.error(erreur);
         return resultat.sendStatus(500); //internal server error
       }
+
+      console.log(lignes);
 
       //si l'email est inexistant
       if (lignes.length === 0) {
