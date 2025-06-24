@@ -73,8 +73,8 @@ app.post("/produit", interceptor, (requete, resultat) => {
       }
 
       connection.query(
-        "INSERT INTO produit (nom, description) VALUES (?, ?)",
-        [produit.nom, produit.description],
+        "INSERT INTO produit (nom, description, id_createur) VALUES (?, ?, ?)",
+        [produit.nom, produit.description, requete.user.id],
         (err, lignes) => {
           if (err) {
             console.error(err);
@@ -87,6 +87,48 @@ app.post("/produit", interceptor, (requete, resultat) => {
     }
   );
 });
+
+app.delete("/produit/:id", interceptor, (requete, resultat) => {
+
+  //on recupere le produit
+  connection.query("SELECT * FROM produit WHERE id = ?", [requete.params.id], (erreur, lignes) => {
+
+    //si il y a eu une erreur
+    if (erreur) {
+      console.error(err);
+      return resultat.sendStatus(500); //internal server error
+    }
+
+    //si l'id du produit est inconnu
+    if(lignes.length == 0) {
+      return resultat.sendStatus(404);
+    }
+
+    //on vérifie si l'utilisateur connecté est le propriétaire
+    const estProprietaire = requete.user.role == "vendeur" && requete.user.id == lignes[0].id_createur
+
+    //si il n'est ni propriétaire du produit, ni administrateur
+    if (!estProprietaire && requete.user.role != "administrateur") {
+      return resultat.sendStatus(403);
+    }
+
+    //on supprime le produit
+    connection.query("DELETE FROM produit WHERE id = ?", [requete.params.id], (erreur, lignes) => {
+      //si il y a eu une erreur
+      if (erreur) {
+        console.error(err);
+        return resultat.sendStatus(500); //internal server error
+      }
+
+      //204 = no content = tout c'est bien passé, mais il n'y a rien dans le corp de la réponse
+      return resultat.sendStatus(204);
+    })
+
+  })
+
+  
+
+})
 
 app.post("/inscription", (requete, resultat) => {
   const utilisateur = requete.body;
@@ -149,6 +191,7 @@ app.post("/connexion", (requete, resultat) => {
           {
             sub: requete.body.email,
             role: lignes[0].nom,
+            id: lignes[0].id
           },
           "azerty123"
         )
