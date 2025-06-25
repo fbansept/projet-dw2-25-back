@@ -45,12 +45,75 @@ app.get("/produits/liste", (requete, resultat) => {
   });
 });
 
+app.get("/produit/:id", (requete, resultat) => {
+  connection.query(
+    "SELECT * FROM produit WHERE id = ?",
+    [requete.params.id],
+    (err, lignes) => {
+      //en cas d'erreur sql ou d'interuption de connexion avec la bdd
+      if (err) {
+        console.error(err);
+        return resultat.sendStatus(500);
+      }
+
+      //si l'id du produit est inconnu
+      if (lignes.length == 0) {
+        return resultat.sendStatus(404);
+      }
+
+      return resultat.json(lignes[0]);
+    }
+  );
+});
+
+app.put("/produit/:id", interceptor, (requete, resultat) => {
+  const produit = requete.body;
+  produit.id = requete.params.id;
+
+  if (requete.user.role != "vendeur" && requete.user.role != "administrateur") {
+    return resultat.sendStatus(403);
+  }
+
+  if (
+    produit.nom == null ||
+    produit.nom == "" ||
+    produit.nom.length > 20 ||
+    produit.description.length > 50
+  ) {
+    //validation
+    return resultat.sendStatus(400); //bad request
+  }
+
+  //verification si le nom du produit existe déjà
+  connection.query(
+    "SELECT * FROM produit WHERE nom = ? AND id != ?",
+    [produit.nom, produit.id],
+    (err, lignes) => {
+      if (lignes.length > 0) {
+        return resultat.sendStatus(409); //conflict
+      }
+
+      connection.query(
+        "UPDATE produit SET nom = ?, description = ? WHERE id = ?",
+        [produit.nom, produit.description, produit.id],
+        (err, lignes) => {
+          if (err) {
+            console.error(err);
+            return resultat.sendStatus(500); //internal server error
+          }
+
+          return resultat.status(200).json(produit); //ok
+        }
+      );
+    }
+  );
+});
+
 app.post("/produit", interceptor, (requete, resultat) => {
   const produit = requete.body;
 
-  if (requete.user.role != "vendeur" && 
-    requete.user.role != "administrateur") {
-      return resultat.sendStatus(403);
+  if (requete.user.role != "vendeur" && requete.user.role != "administrateur") {
+    return resultat.sendStatus(403);
   }
 
   if (
@@ -89,46 +152,50 @@ app.post("/produit", interceptor, (requete, resultat) => {
 });
 
 app.delete("/produit/:id", interceptor, (requete, resultat) => {
-
   //on recupere le produit
-  connection.query("SELECT * FROM produit WHERE id = ?", [requete.params.id], (erreur, lignes) => {
-
-    //si il y a eu une erreur
-    if (erreur) {
-      console.error(err);
-      return resultat.sendStatus(500); //internal server error
-    }
-
-    //si l'id du produit est inconnu
-    if(lignes.length == 0) {
-      return resultat.sendStatus(404);
-    }
-
-    //on vérifie si l'utilisateur connecté est le propriétaire
-    const estProprietaire = requete.user.role == "vendeur" && requete.user.id == lignes[0].id_createur
-
-    //si il n'est ni propriétaire du produit, ni administrateur
-    if (!estProprietaire && requete.user.role != "administrateur") {
-      return resultat.sendStatus(403);
-    }
-
-    //on supprime le produit
-    connection.query("DELETE FROM produit WHERE id = ?", [requete.params.id], (erreur, lignes) => {
+  connection.query(
+    "SELECT * FROM produit WHERE id = ?",
+    [requete.params.id],
+    (erreur, lignes) => {
       //si il y a eu une erreur
       if (erreur) {
         console.error(err);
         return resultat.sendStatus(500); //internal server error
       }
 
-      //204 = no content = tout c'est bien passé, mais il n'y a rien dans le corp de la réponse
-      return resultat.sendStatus(204);
-    })
+      //si l'id du produit est inconnu
+      if (lignes.length == 0) {
+        return resultat.sendStatus(404);
+      }
 
-  })
+      //on vérifie si l'utilisateur connecté est le propriétaire
+      const estProprietaire =
+        requete.user.role == "vendeur" &&
+        requete.user.id == lignes[0].id_createur;
 
-  
+      //si il n'est ni propriétaire du produit, ni administrateur
+      if (!estProprietaire && requete.user.role != "administrateur") {
+        return resultat.sendStatus(403);
+      }
 
-})
+      //on supprime le produit
+      connection.query(
+        "DELETE FROM produit WHERE id = ?",
+        [requete.params.id],
+        (erreur, lignes) => {
+          //si il y a eu une erreur
+          if (erreur) {
+            console.error(err);
+            return resultat.sendStatus(500); //internal server error
+          }
+
+          //204 = no content = tout c'est bien passé, mais il n'y a rien dans le corp de la réponse
+          return resultat.sendStatus(204);
+        }
+      );
+    }
+  );
+});
 
 app.post("/inscription", (requete, resultat) => {
   const utilisateur = requete.body;
@@ -191,7 +258,7 @@ app.post("/connexion", (requete, resultat) => {
           {
             sub: requete.body.email,
             role: lignes[0].nom,
-            id: lignes[0].id
+            id: lignes[0].id,
           },
           "azerty123"
         )
